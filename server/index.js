@@ -85,7 +85,8 @@ app.listen(port, () => {
         await flush();
         process.exit(0);
     }));
-    ['unhandledRejection', 'uncaughtException'].forEach((v) => process.on(v, async () => {
+    ['unhandledRejection', 'uncaughtException'].forEach((v) => process.on(v, async (err) => {
+        console.log(err);
         await flush();
         process.exit(1);
     }))

@@ -4,7 +4,7 @@ function rateLimiter(ip) {
     const data = rateBucket.get(ip);
     const now = new Date();
     if (!data) {
-        now.setHours(now.getHours() + 2);
+        now.setHours(now.getHours() + 1);
         rateBucket.set(ip, {
             writes: 1,
             resetsAt: now

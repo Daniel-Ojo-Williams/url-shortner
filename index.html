@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>shrt - URL Shortener</title>
+    <link rel="stylesheet" href="./index.css">
+</head>
+<body>
+    <div class="page">
+        <div class="container">
+            <header class="header">
+                <h1 class="title">shrt</h1>
+                <p class="subtitle">minimal url shortener</p>
+            </header>
+
+            <main class="main">
+                <!-- URL Shortener Section -->
+                <section class="shorten-section">
+                    <h2 class="section-title">shorten</h2>
+                    <form id="shorten-form" class="input-row">
+                        <input 
+                            type="text" 
+                            id="url-input" 
+                            placeholder="https://example.com/very/long/url"
+                            required
+                        >
+                        <button type="submit" id="shorten-btn">shorten</button>
+                    </form>
+                    <div id="shorten-result" class="result hidden">
+                        <div class="result-content">
+                            <span class="result-label">short url:</span>
+                            <a href="#" id="short-link" class="short-link" target="_blank"></a>
+                            <button id="copy-btn" class="copy-btn">copy</button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Analytics Section -->
+                <section class="analytics-section">
+                    <h2 class="section-title">analytics</h2>
+                    <form id="analytics-form" class="input-row">
+                        <input 
+                            type="text" 
+                            id="analytics-input" 
+                            placeholder="enter short code or short url"
+                            required
+                        >
+                        <button type="submit" id="analytics-btn">search</button>
+                    </form>
+                    <div id="analytics-result" class="analytics-result hidden">
+                        <div class="analytics-content">
+                            <div class="url-info">
+                                <span class="info-label">original url:</span>
+                                <a href="#" id="original-url" class="original-url" target="_blank"></a>
+                            </div>
+                            <div class="stats">
+                                <span class="stat-item">clicks: <span id="click-count">0</span></span>
+                                <span class="stat-item">created: <span id="created-date">-</span></span>
+                            </div>
+                            <div class="click-history">
+                                <h3 class="history-title">click history</h3>
+                                <div id="click-list" class="click-list"></div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </main>
+        </div>
+    </div>
+
+    <script>
+        const BACKEND_BASE_URL = 'http://localhost:4050';
+        const buildApiUrl = (path) => new URL(path, `${BACKEND_BASE_URL}/`).toString();
+
+        // DOM Elements
+        const shortenForm = document.getElementById('shorten-form');
+        const urlInput = document.getElementById('url-input');
+        const shortenBtn = document.getElementById('shorten-btn');
+        const shortenResult = document.getElementById('shorten-result');
+        const shortLink = document.getElementById('short-link');
+        const copyBtn = document.getElementById('copy-btn');
+
+        const analyticsForm = document.getElementById('analytics-form');
+        const analyticsInput = document.getElementById('analytics-input');
+        const analyticsBtn = document.getElementById('analytics-btn');
+        const analyticsResult = document.getElementById('analytics-result');
+        const originalUrl = document.getElementById('original-url');
+        const clickCount = document.getElementById('click-count');
+        const createdDate = document.getElementById('created-date');
+        const clickList = document.getElementById('click-list');
+
+        const getResponsePayload = async (response) => {
+            const payload = await response.json().catch(() => null);
+            return payload;
+        };
+
+        const getAnalyticsReportUrl = (value) => {
+            const trimmedValue = value.trim();
+            if (!trimmedValue) return '';
+
+            try {
+                const parsedUrl = new URL(trimmedValue);
+                const normalizedPath = parsedUrl.pathname.replace(/\/+$/, '').replace(/\/report$/, '');
+                parsedUrl.pathname = `${normalizedPath}/report`;
+                parsedUrl.search = '';
+                parsedUrl.hash = '';
+                return parsedUrl.toString();
+            } catch {
+                const key = trimmedValue.replace(/^\/+|\/+$/g, '').replace(/\/report$/, '').split('/').pop() || '';
+                return key ? buildApiUrl(`${encodeURIComponent(key)}/report`) : '';
+            }
+        };
+
+        // Shorten URL
+        shortenForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const url = urlInput.value.trim();
+            if (!url) return;
+
+            shortenBtn.textContent = 'shortening...';
+            shortenBtn.disabled = true;
+
+            try {
+                const response = await fetch(buildApiUrl('shorten'), {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ longLink: url })
+                });
+
+                const data = await getResponsePayload(response);
+
+                if (response.ok) {
+                    shortLink.href = data.shortLink;
+                    shortLink.textContent = data.shortLink;
+                    shortenResult.classList.remove('hidden');
+                    urlInput.value = '';
+                } else {
+                    alert(data?.message || 'Failed to shorten URL');
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            } finally {
+                shortenBtn.textContent = 'shorten';
+                shortenBtn.disabled = false;
+            }
+        });
+
+        // Copy to clipboard
+        copyBtn.addEventListener('click', async () => {
+            try {
+                await navigator.clipboard.writeText(shortLink.textContent);
+                copyBtn.textContent = 'copied!';
+                setTimeout(() => {
+                    copyBtn.textContent = 'copy';
+                }, 2000);
+            } catch (error) {
+                alert('Failed to copy to clipboard');
+            }
+        });
+
+        // Get Analytics
+        analyticsForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const reportUrl = getAnalyticsReportUrl(analyticsInput.value);
+            if (!reportUrl) return;
+
+            analyticsBtn.textContent = 'searching...';
+            analyticsBtn.disabled = true;
+
+            try {
+                const response = await fetch(reportUrl);
+                const data = await getResponsePayload(response);
+
+                if (response.ok) {
+                    originalUrl.href = data.data.longLink;
+                    originalUrl.textContent = data.data.longLink;
+                    clickCount.textContent = data.data.analytics.length;
+                    createdDate.textContent = new Date(data.data.createdAt).toLocaleString();
+                    
+                    // Display click history
+                    clickList.innerHTML = '';
+                    data.data.analytics.forEach((click, index) => {
+                        const clickItem = document.createElement('div');
+                        clickItem.className = 'click-item';
+                        clickItem.innerHTML = `
+                            <span class="click-number">#${index + 1}</span>
+                            <span class="click-ip">${click.ip}</span>
+                            <span class="click-date">${new Date(click.date).toLocaleString()}</span>
+                        `;
+                        clickList.appendChild(clickItem);
+                    });
+
+                    analyticsResult.classList.remove('hidden');
+                    analyticsInput.value = '';
+                } else {
+                    alert(data?.message || 'Analytics not found');
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            } finally {
+                analyticsBtn.textContent = 'search';
+                analyticsBtn.disabled = false;
+            }
+        });
+
+        // Hide results when typing in inputs
+        urlInput.addEventListener('input', () => {
+            shortenResult.classList.add('hidden');
+        });
+
+        analyticsInput.addEventListener('input', () => {
+            analyticsResult.classList.add('hidden');
+        });
+    </script>
+</body>
+</html>
